@@ -13,118 +13,138 @@ import randomreverser.util.Rand;
 public class DropperCracker extends JFrame {
 
     private final int SIZE = 16;
+    private final int ITEMS_PER_DROPPER = 8;
+    private final int WINDOW_WIDTH = 400;
+    private final int WINDOW_HEIGHT = 425;
 
     private DropperCracker() {
 
-        JPanel p1 = new JPanel();
-        p1.setLayout(new GridLayout(SIZE, SIZE,0,0));
+        JPanel panel = new JPanel();
+        panel.setLayout(new GridLayout(SIZE, SIZE));
 
-        boolean[][] checkBoxes = new boolean[SIZE][SIZE];
-        ArrayList<JCheckBox> cbs = new ArrayList<>(SIZE*SIZE);
+        boolean[][] litLamps = new boolean[SIZE][SIZE];
+        ArrayList<JCheckBox> checkboxes = new ArrayList<>(SIZE*SIZE);
 
-        for (int i = 0; i < 16*16; i++) {
+        for (int cbox = 0; cbox < SIZE*SIZE; cbox++) {
             JCheckBox checkbox = new JCheckBox();
             checkbox.addActionListener((ActionEvent event) -> {
                 for (int row = 0; row < SIZE; row++) {
                     for (int col = 0; col < SIZE; col++) {
-                        checkBoxes[row][col] = cbs.get(row*SIZE+col).isSelected();
+                        litLamps[row][col] = checkboxes.get(row*SIZE+col).isSelected();
                     }
                 }
             });
-            cbs.add(checkbox);
-            p1.add(checkbox);
+            checkboxes.add(checkbox);
+            panel.add(checkbox);
         }
 
-        JLabel s = new JLabel("Seed: ");
-        JButton fire = new JButton("Crack");
+        JLabel output = new JLabel("Seed: ");
+        JButton crack = new JButton("Crack");
         JButton reset = new JButton("Reset");
         JButton copy = new JButton("Copy");
 
-        copy.addActionListener((ActionEvent e) -> {
+        copy.setEnabled(false);
+        copy.addActionListener((ActionEvent event) -> {
             try {
-                String seed = s.getText().split(" ")[1];
+                String seed = output.getText().split(" ")[1];
                 Long.parseLong(seed);
-                StringSelection stringSelection = new StringSelection(s.getText().split(" ")[1]);
+                StringSelection stringSelection = new StringSelection(output.getText().split(" ")[1]);
                 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                 clipboard.setContents(stringSelection, null);
-            } catch (ArrayIndexOutOfBoundsException | NumberFormatException ee) {
-                System.err.println(ee.getMessage());
+            } catch (ArrayIndexOutOfBoundsException | NumberFormatException e) {
+                System.err.println("Tried to copy but couldn't find a seed!");
+                System.err.println(e.getMessage());
             }
         });
-        copy.setEnabled(false);
 
-        fire.addActionListener((ActionEvent e) -> {
-            ArrayList<Integer> indices = getSuccessfulIndices(checkBoxes);
+
+        crack.addActionListener((ActionEvent event) -> {
+            ArrayList<Integer> indices = getSuccessfulIndices(litLamps);
+
             if (indices.size() < 14) {
-                s.setText("Not Enough Info to Crack");
+                output.setText("Not Enough Info to Crack");
                 return;
             }
+
             RandomReverser device = new RandomReverser();
-            int last = 0;
+            int lastSuccessfulIndex = 0;
             int count = 0;
-            for (int j: indices) {
+            for (int callIndex: indices) {
                 if (count < 24) {
-                    device.consumeNextFloatCalls(j - last - 1);
-                    device.addNextIntCall(8, 0, 0);
+                    device.consumeNextFloatCalls(callIndex - lastSuccessfulIndex - 1);
+                    device.addNextIntCall(ITEMS_PER_DROPPER, 0, 0);
                 }
-                last = j;
+                lastSuccessfulIndex = callIndex;
                 count++;
             }
-            AtomicInteger k = new AtomicInteger(0);
+
+            AtomicInteger seedsFound = new AtomicInteger(0);
+
             device.findAllValidSeeds().forEach(m -> {
-                Rand r = Rand.ofInternalSeed(m);
-                r.advance(2048);
-                s.setText("Seed: " + r.getSeed());
+                Rand randAdvancer = Rand.ofInternalSeed(m);
+                randAdvancer.advance(SIZE*SIZE*ITEMS_PER_DROPPER);
+                output.setText("Seed: " + randAdvancer.getSeed());
                 copy.setEnabled(true);
-                k.incrementAndGet();
+                seedsFound.incrementAndGet();
             });
-            if (k.get() == 0) {
-                s.setText("Could Not Find Seeds");
+
+            if (seedsFound.get() == 0) {
+                output.setText("Could Not Find Seeds");
                 copy.setEnabled(false);
-            } else if (k.get() > 1) {
-                s.setText("No Unique Seed Identified");
+            } else if (seedsFound.get() > 1) {
+                output.setText("No Unique Seed Identified");
                 copy.setEnabled(false);
             }
         });
 
-        reset.addActionListener((ActionEvent e) -> {
+        reset.addActionListener((ActionEvent event) -> {
             for (int row = 0; row < SIZE; row++)
                 for (int col = 0; col < SIZE; col++) {
-                    checkBoxes[row][col] = false;
-                    cbs.get(row*SIZE+col).setSelected(false);
-                    s.setText("Seed: ");
+                    litLamps[row][col] = false;
+                    checkboxes.get(row*SIZE+col).setSelected(false);
+                    output.setText("Seed: ");
                     copy.setEnabled(false);
                 }
         });
 
         setLayout(new FlowLayout());
 
-        add(p1);
+        add(panel);
         add(reset);
-        add(fire);
+        add(crack);
         add(copy);
-        add(s);
+        add(output);
 
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setTitle("Dropper Cracker");
-        setSize(400,425);
+        setSize(WINDOW_WIDTH,WINDOW_HEIGHT);
         setVisible(true);
     }
 
     private ArrayList<Integer> getSuccessfulIndices(boolean[][] checkboxes) {
         ArrayList<Integer> callIndices = new ArrayList<>();
         int count = 0;
+
+        // snake upwards starting from the lower right
+        // example on 3x3:
+        //
+        //  9 8 7
+        //  4 5 6
+        //  3 2 1
         for (int i = SIZE - 1; i >= 0; i--) {
-            if ((i & 1) == 0) {
+            //the snake alternates iterating left to right and right to left. Last row always right to left.
+            if ((i % 2) == (SIZE % 2)) {
+                //this row goes from left to right
                 for (int j = 0; j < SIZE; j++) {
-                    count += 8;
+                    count += ITEMS_PER_DROPPER;
                     if (checkboxes[i][j]) {
                         callIndices.add(count);
                     }
                 }
             } else {
+                //this row goes from right to left
                 for (int j = SIZE - 1; j >= 0; j--) {
-                    count += 8;
+                    count += ITEMS_PER_DROPPER;
                     if (checkboxes[i][j]) {
                         callIndices.add(count);
                     }
