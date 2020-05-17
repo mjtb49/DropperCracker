@@ -3,6 +3,9 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.awt.datatransfer.StringSelection;
+import java.awt.Toolkit;
+import java.awt.datatransfer.Clipboard;
 
 import randomreverser.RandomReverser;
 import randomreverser.util.Rand;
@@ -35,6 +38,20 @@ public class DropperCracker extends JFrame {
         JLabel s = new JLabel("Seed: ");
         JButton fire = new JButton("Crack");
         JButton reset = new JButton("Reset");
+        JButton copy = new JButton("Copy");
+
+        copy.addActionListener((ActionEvent e) -> {
+            try {
+                String seed = s.getText().split(" ")[1];
+                Long.parseLong(seed);
+                StringSelection stringSelection = new StringSelection(s.getText().split(" ")[1]);
+                Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+                clipboard.setContents(stringSelection, null);
+            } catch (ArrayIndexOutOfBoundsException | NumberFormatException ee) {
+                System.err.println(ee.getMessage());
+            }
+        });
+        copy.setEnabled(false);
 
         fire.addActionListener((ActionEvent e) -> {
             ArrayList<Integer> indices = getSuccessfulIndices(checkBoxes);
@@ -58,12 +75,15 @@ public class DropperCracker extends JFrame {
                 Rand r = Rand.ofInternalSeed(m);
                 r.advance(2048);
                 s.setText("Seed: " + r.getSeed());
+                copy.setEnabled(true);
                 k.incrementAndGet();
             });
             if (k.get() == 0) {
                 s.setText("Could Not Find Seeds");
+                copy.setEnabled(false);
             } else if (k.get() > 1) {
                 s.setText("No Unique Seed Identified");
+                copy.setEnabled(false);
             }
         });
 
@@ -73,6 +93,7 @@ public class DropperCracker extends JFrame {
                     checkBoxes[row][col] = false;
                     cbs.get(row*SIZE+col).setSelected(false);
                     s.setText("Seed: ");
+                    copy.setEnabled(false);
                 }
         });
 
@@ -81,6 +102,7 @@ public class DropperCracker extends JFrame {
         add(p1);
         add(reset);
         add(fire);
+        add(copy);
         add(s);
 
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
